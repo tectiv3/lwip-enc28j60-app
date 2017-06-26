@@ -1,5 +1,5 @@
-author: mongoose-os
-description: Arduino C/C++ basic API usage example
+author: tectiv3
+description: lwIP enc28j60 test
 version: 1.0
 
 sources:
@@ -8,8 +8,7 @@ filesystem:
   - fs
 libs:
     # common mgos libs
-  - origin: https://github.com/mongoose-os-libs/http-server
-  - origin: https://github.com/mongoose-os-libs/ota-http-server
+    
   - origin: https://github.com/mongoose-os-libs/rpc-loopback
   - origin: https://github.com/mongoose-os-libs/rpc-mqtt
   - origin: https://github.com/mongoose-os-libs/rpc-service-config
@@ -18,11 +17,14 @@ libs:
   - origin: https://github.com/mongoose-os-libs/rpc-service-i2c
   - origin: https://github.com/mongoose-os-libs/rpc-service-ota
   - origin: https://github.com/mongoose-os-libs/rpc-uart
+  - origin: https://github.com/mongoose-os-libs/mjs
+    # custrom libs
+  - origin: https://github.com/tectiv3/arduino-spi
   - origin: https://github.com/mongoose-os-libs/spi
-  - origin: https://github.com/mongoose-os-libs/vfs-dev-spi-flash
+  - origin: https://github.com/tectiv3/lwip-enc28j60
 
-    # libs necessary for the current app
-  - origin: https://github.com/mongoose-os-libs/arduino-compat
+config_schema:
+  - ["i2c.enable", true]
 
 tags:
   - c
