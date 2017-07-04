@@ -7,7 +7,7 @@ sources:
 filesystem:
   - fs
 libs:
-  - origin: https://github.com/mongoose-os-libs/http-server
+  - origin: https://github.com/tectiv3/http-server
     # common mgos libs
   - origin: https://github.com/mongoose-os-libs/rpc-loopback
   - origin: https://github.com/mongoose-os-libs/rpc-mqtt

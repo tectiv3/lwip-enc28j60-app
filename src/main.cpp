@@ -1,10 +1,10 @@
 #include <stdio.h>
 
+#include "fw/src/mgos.h"
 #include "mgos_http_server.h"
 #include "mongoose/mongoose.h"
 #include "fw/src/mgos_app.h"
 #include "fw/src/mgos_mongoose.h"
-#include "fw/src/mgos.h"
 #include "fw/src/mgos_init.h"
 #include "fw/src/mgos_timers.h"
 
@@ -43,7 +43,7 @@ static void handle_conn(struct mg_connection *nc, int ev, void *ev_data, void *u
 	switch (ev) {
 		case MG_EV_CONNECT:
 			if (*(int *) ev_data != 0) {
-				fprintf("connect() failed: %s\n", strerror(*(int *) ev_data));
+				printf("connect() failed: %s\n", strerror(*(int *) ev_data));
 			}
 			break;
 		case MG_EV_HTTP_REPLY: {
@@ -175,18 +175,13 @@ void loop_cb(void *arg) {
 	(void) arg;
 }
 
-static void ctl_handler(struct mg_connection *c, int ev, void *p, void *user_data) {
+static void http_handler(struct mg_connection *c, int ev, void *p, void *user_data) {
+	printf("http event: %d", ev);
   if (ev == MG_EV_HTTP_REQUEST) {
     struct http_message *hm = (struct http_message *) p;
     struct mg_str *s = hm->body.len > 0 ? &hm->body : &hm->query_string;
 
-    int pin, state, status = -1;
-    if (json_scanf(s->p, s->len, "{pin: %d, state: %d}", &pin, &state) == 2) {
-      mgos_gpio_set_mode(pin, MGOS_GPIO_MODE_OUTPUT);
-      mgos_gpio_write(pin, state);
-      status = 0;
-    }
-    mg_printf(c, "HTTP/1.0 200 OK\n\n{\"status\": %d}\n", status);
+    mg_printf(c, "HTTP/1.0 200 OK\n\n{\"status\": %d}\n", 1);
     c->flags |= MG_F_SEND_AND_CLOSE;
     LOG(LL_INFO, ("Got: [%.*s]", (int) s->len, s->p));
   }
@@ -195,7 +190,7 @@ static void ctl_handler(struct mg_connection *c, int ev, void *p, void *user_dat
 
 enum mgos_app_init_result mgos_app_init(void) {
 	mch_net_init();
-    // mgos_register_http_endpoint("/ctl", ctl_handler, NULL);
+    mgos_register_http_endpoint("/", http_handler, NULL);
 	s_loop_timer = mgos_set_timer(0, true /* repeat */, loop_cb, NULL);
 	return MGOS_APP_INIT_SUCCESS;
 }
