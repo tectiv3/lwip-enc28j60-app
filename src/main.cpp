@@ -1,4 +1,12 @@
-#include <Arduino.h>
+#include <stdio.h>
+
+#include "mgos_http_server.h"
+#include "mongoose/mongoose.h"
+#include "fw/src/mgos_app.h"
+#include "fw/src/mgos_mongoose.h"
+#include "fw/src/mgos.h"
+#include "fw/src/mgos_init.h"
+#include "fw/src/mgos_timers.h"
 
 #include "tcpip_adapter.h"
 #include "lwip/ip_addr.h"
@@ -17,9 +25,39 @@
 #include <netdb.h>
 #include "freertos/event_groups.h"
 
+#include "common/cs_dbg.h"
+#include "common/platform.h"
+#include "frozen/frozen.h"
+
+
 static struct netif mchdrv_netif;
 static enc_device_t mchdrv_hw;
 tcpip_adapter_ip_info_t eth_ip;
+
+struct mg_connection *conn = NULL;
+
+static mgos_timer_id s_loop_timer;
+
+static void handle_conn(struct mg_connection *nc, int ev, void *ev_data, void *user_data) {
+	printf("HC Event: %d", ev);
+	switch (ev) {
+		case MG_EV_CONNECT:
+			if (*(int *) ev_data != 0) {
+				fprintf("connect() failed: %s\n", strerror(*(int *) ev_data));
+			}
+			break;
+		case MG_EV_HTTP_REPLY: {
+			nc->flags |= MG_F_CLOSE_IMMEDIATELY;
+			break;
+		}
+		case MG_EV_CLOSE: {
+			conn = NULL;
+			break;
+		}
+	}
+	(void) ev_data;
+	(void) user_data;
+}
 
 static void dhcpc_cb(struct netif *netif) {
     printf("DHCP callback\n");
@@ -44,6 +82,10 @@ static void dhcpc_cb(struct netif *netif) {
 			printf("Set default\n");
 			netif_set_default(&mchdrv_netif);
 
+			char *eh = NULL, *pdata = NULL;
+			conn = mg_connect_http(mgos_get_mgr(), handle_conn, NULL, "http://google.com", eh, pdata);
+		    free(eh);
+		    free(pdata);
 		    struct hostent *hp;
 			struct ip4_addr *ip4_addr;
 	        hp = gethostbyname((const char *)"google.com");
@@ -87,6 +129,14 @@ static esp_err_t eth_event_handler(void *ctx, system_event_t *event) {
 
 void mch_net_init(void) {
 	uint8_t mymac[6] = { 0x00,0x04,0xA3,0x2D,0x30,0x31 };
+
+    // do we need to initialize LWIP here? or is it already initialized in mg core?
+    // lwip_init();
+    // uint8_t mac[6];
+    // esp_eth_get_mac(mac);
+    // printf("%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    // tcpip_adapter_init();
     ESP_ERROR_CHECK( esp_event_loop_init(eth_event_handler, NULL) );
 
 	// tcpip_adapter_start
@@ -120,10 +170,32 @@ void mch_net_poll(void) {
     mchdrv_poll(&mchdrv_netif);
 }
 
-void setup(void) {
-	mch_net_init();
+void loop_cb(void *arg) {
+	mch_net_poll();
+	(void) arg;
 }
 
-void loop() {
-	mch_net_poll();
+static void ctl_handler(struct mg_connection *c, int ev, void *p, void *user_data) {
+  if (ev == MG_EV_HTTP_REQUEST) {
+    struct http_message *hm = (struct http_message *) p;
+    struct mg_str *s = hm->body.len > 0 ? &hm->body : &hm->query_string;
+
+    int pin, state, status = -1;
+    if (json_scanf(s->p, s->len, "{pin: %d, state: %d}", &pin, &state) == 2) {
+      mgos_gpio_set_mode(pin, MGOS_GPIO_MODE_OUTPUT);
+      mgos_gpio_write(pin, state);
+      status = 0;
+    }
+    mg_printf(c, "HTTP/1.0 200 OK\n\n{\"status\": %d}\n", status);
+    c->flags |= MG_F_SEND_AND_CLOSE;
+    LOG(LL_INFO, ("Got: [%.*s]", (int) s->len, s->p));
+  }
+  (void) user_data;
+}
+
+enum mgos_app_init_result mgos_app_init(void) {
+	mch_net_init();
+    // mgos_register_http_endpoint("/ctl", ctl_handler, NULL);
+	s_loop_timer = mgos_set_timer(0, true /* repeat */, loop_cb, NULL);
+	return MGOS_APP_INIT_SUCCESS;
 }
